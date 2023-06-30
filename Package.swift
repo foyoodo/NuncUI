@@ -13,5 +13,8 @@ let package = Package(
     ],
     targets: [
         .target(name: "NuncUI")
+    ],
+    swiftLanguageVersions: [
+        .v5
     ]
 )
