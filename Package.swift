@@ -5,9 +5,6 @@ import PackageDescription
 
 let package = Package(
     name: "NuncUI",
-    platforms: [
-        .iOS(.v11)
-    ],
     products: [
         .library(name: "NuncUI", targets: ["NuncUI"])
     ],

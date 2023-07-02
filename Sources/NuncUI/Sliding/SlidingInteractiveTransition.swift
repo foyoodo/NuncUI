@@ -31,6 +31,8 @@ public final class SlidingInteractiveTransition: BaseInteractiveTransition {
 
     public weak var screenEdgePanGestureRecognizer: UIScreenEdgePanGestureRecognizer?
 
+    public var presentationWillBegin: (() -> Void)?
+
     public override func wire(to viewController: UIViewController, for operation: InteractiveOperation) {
         super.wire(to: viewController, for: operation)
 
@@ -101,14 +103,13 @@ extension SlidingInteractiveTransition {
                 presentingViewController?.dismiss(animated: false)
             }
             if let slidingViewController = delegate?.slidingViewController {
+                presentationWillBegin?()
                 presentingViewController?.present(slidingViewController, animated: true)
             }
         case .changed:
-            let translation = recognizer.translation(in: recognizer.view)
-            let fraction = min(1, abs(translation.x / 380))
-            let vel = recognizer.velocity(in: recognizer.view)
-            shouldCompleteTransition = fraction > 0.2 || abs(vel.x) > 500
-            update(fraction)
+            let res = transitionFraction(of: recognizer, operation: .present)
+            shouldCompleteTransition = res.shouldCompleteTransition
+            update(res.fraction)
         case .cancelled, .ended:
             completionSpeed = 0.8
             completionCurve = .easeInOut
@@ -124,35 +125,9 @@ extension SlidingInteractiveTransition {
             isInteractive = true
             presentedViewController?.presentingViewController?.dismiss(animated: true)
         case .changed:
-            let translation = recognizer.translation(in: recognizer.view)
-            let velocity = recognizer.velocity(in: recognizer.view)
-            let translationValue: CGFloat
-            let velocityValue: CGFloat
-
-            switch delegate?.slidingPosition {
-            case .top:
-                translationValue = -translation.y
-                velocityValue = -velocity.y
-            case .left:
-                translationValue = -translation.x
-                velocityValue = -velocity.x
-            case .right:
-                translationValue = translation.x
-                velocityValue = velocity.x
-            case .bottom:
-                translationValue = translation.y
-                velocityValue = velocity.y
-            default:
-                // Assume position left
-                translationValue = -translation.x
-                velocityValue = -velocity.x
-            }
-
-            let fraction = min(1, max(0, translationValue / 300))
-
-            shouldCompleteTransition = velocityValue > 500 || (fraction > 0.5 && velocityValue > -100)
-
-            update(fraction)
+            let res = transitionFraction(of: recognizer, operation: .dismiss)
+            shouldCompleteTransition = res.shouldCompleteTransition
+            update(res.fraction)
         case .cancelled, .ended:
             completionSpeed = 0.8
             completionCurve = .easeInOut
@@ -160,5 +135,44 @@ extension SlidingInteractiveTransition {
             isInteractive = false
         default: ()
         }
+    }
+
+    private func transitionFraction(of recognizer: UIPanGestureRecognizer, operation: InteractiveOperation) -> (fraction: CGFloat, shouldCompleteTransition: Bool) {
+        let translation = recognizer.translation(in: recognizer.view)
+        let velocity = recognizer.velocity(in: recognizer.view)
+        let translationValue: CGFloat
+        let velocityValue: CGFloat
+        let multiplier: CGFloat
+
+        switch operation {
+        case .present:
+            multiplier =  1.0
+        case .dismiss:
+            multiplier = -1.0
+        }
+
+        switch delegate?.slidingPosition {
+        case .top:
+            translationValue = translation.y * multiplier
+            velocityValue = velocity.y * multiplier
+        case .left:
+            translationValue = translation.x * multiplier
+            velocityValue = velocity.x * multiplier
+        case .right:
+            translationValue = translation.x * -multiplier
+            velocityValue = velocity.x * -multiplier
+        case .bottom:
+            translationValue = translation.y * -multiplier
+            velocityValue = velocity.y * -multiplier
+        default:
+            // Assume position left
+            translationValue = translation.x * multiplier
+            velocityValue = velocity.x * multiplier
+        }
+
+        let fraction = min(1, max(0, translationValue / 300))
+        let shouldCompleteTransition = velocityValue > 500 || (fraction > 0.5 && velocityValue > -100)
+
+        return (fraction, shouldCompleteTransition)
     }
 }
