@@ -13,6 +13,11 @@ private var kDismissalPanGestureRecognizer: UInt8 = 0
 
 public final class SlidingInteractiveTransition: BaseInteractiveTransition {
 
+    public enum PresentationGestureType {
+        case screenEdgePan
+        case pan
+    }
+
     public weak var delegate: SlidingTransitioningDelegate? {
         didSet {
             delegate?.slidingInteractiveTransition = self
@@ -22,6 +27,7 @@ public final class SlidingInteractiveTransition: BaseInteractiveTransition {
         }
     }
 
+    public var presentationGestureType: PresentationGestureType
     public var dismissalWiringEnabled: Bool
 
     private weak var presentingViewController: UIViewController?
@@ -29,7 +35,7 @@ public final class SlidingInteractiveTransition: BaseInteractiveTransition {
 
     private var shouldCompleteTransition = false
 
-    public weak var screenEdgePanGestureRecognizer: UIScreenEdgePanGestureRecognizer?
+    public weak var presentationPanGestureRecognizer: UIPanGestureRecognizer?
 
     public var presentationWillBegin: (() -> Void)?
 
@@ -45,8 +51,13 @@ public final class SlidingInteractiveTransition: BaseInteractiveTransition {
         }
     }
 
-    public init(delegate: SlidingTransitioningDelegate, defaultDismissalWiring dismissalWiringEnabled: Bool = true) {
+    public init(
+        delegate: SlidingTransitioningDelegate,
+        presentationGestureType: PresentationGestureType = .screenEdgePan,
+        defaultDismissalWiring dismissalWiringEnabled: Bool = true
+    ) {
         self.delegate = delegate
+        self.presentationGestureType = presentationGestureType
         self.dismissalWiringEnabled = dismissalWiringEnabled
 
         super.init()
@@ -61,20 +72,27 @@ public final class SlidingInteractiveTransition: BaseInteractiveTransition {
     public func prepareGestureRecognizer(for view: UIView, operation: InteractiveOperation) {
         switch operation {
         case .present:
-            if let _ = objc_getAssociatedObject(self, &kPresentationPanGestureRecognizer) as? UIScreenEdgePanGestureRecognizer {
+            if objc_getAssociatedObject(self, &kPresentationPanGestureRecognizer) is UIPanGestureRecognizer {
                 return
             }
-            let edgePan = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handlePresentationPanGesture(_:)))
-            edgePan.delegate = self
-            objc_setAssociatedObject(self, &kPresentationPanGestureRecognizer, edgePan, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-            switch delegate?.slidingPosition {
-            case .right:
-                edgePan.edges = .right
-            default:
-                edgePan.edges = .left
+            let pan: UIPanGestureRecognizer
+            switch presentationGestureType {
+            case .screenEdgePan:
+                let edgePan = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(self.handlePresentationPanGesture(_:)))
+                switch delegate?.slidingPosition {
+                case .right:
+                    edgePan.edges = .right
+                default:
+                    edgePan.edges = .left
+                }
+                pan = edgePan
+            case .pan:
+                pan = UIPanGestureRecognizer(target: self, action: #selector(self.handlePresentationPanGesture(_:)))
             }
-            view.addGestureRecognizer(edgePan)
-            screenEdgePanGestureRecognizer = edgePan
+            pan.delegate = self
+            view.addGestureRecognizer(pan)
+            objc_setAssociatedObject(self, &kPresentationPanGestureRecognizer, pan, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            presentationPanGestureRecognizer = pan
         case .dismiss:
             if let _ = objc_getAssociatedObject(self, &kDismissalPanGestureRecognizer) as? UIScreenEdgePanGestureRecognizer {
                 return
@@ -88,6 +106,19 @@ public final class SlidingInteractiveTransition: BaseInteractiveTransition {
 
 // MARK: - UIGestureRecognizerDelegate
 extension SlidingInteractiveTransition: UIGestureRecognizerDelegate {
+    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer is UIScreenEdgePanGestureRecognizer {
+            return true
+        }
+
+        guard let pan = gestureRecognizer as? UIPanGestureRecognizer else {
+            return true
+        }
+
+        let vel = pan.velocity(in: pan.view)
+        return abs(vel.x) > abs(vel.y) * 2
+    }
+
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         true
     }
