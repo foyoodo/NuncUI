@@ -116,7 +116,13 @@ extension SlidingInteractiveTransition: UIGestureRecognizerDelegate {
         }
 
         let vel = pan.velocity(in: pan.view)
-        return abs(vel.x) > abs(vel.y) * 2
+
+        switch delegate?.slidingPosition {
+        case .right:
+            return -vel.x > abs(vel.y) * 2
+        default:
+            return vel.x > abs(vel.y) * 2
+        }
     }
 
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
