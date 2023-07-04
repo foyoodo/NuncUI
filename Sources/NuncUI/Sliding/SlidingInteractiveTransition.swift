@@ -126,7 +126,7 @@ extension SlidingInteractiveTransition: UIGestureRecognizerDelegate {
     }
 
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        true
+        otherGestureRecognizer is UIPanGestureRecognizer
     }
 }
 
