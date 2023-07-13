@@ -37,7 +37,10 @@ public final class SlidingInteractiveTransition: BaseInteractiveTransition {
 
     public weak var presentationPanGestureRecognizer: UIPanGestureRecognizer?
 
-    public var presentationWillBegin: (() -> Void)?
+    public var presentationBegan: (() -> Void)?
+    public var presentationChanged: ((CGFloat, CGPoint) -> Void)?
+    public var dismissalBegan: (() -> Void)?
+    public var dismissalChanged: ((CGFloat, CGPoint) -> Void)?
 
     public override func wire(to viewController: UIViewController, for operation: InteractiveOperation) {
         super.wire(to: viewController, for: operation)
@@ -102,6 +105,22 @@ public final class SlidingInteractiveTransition: BaseInteractiveTransition {
             view.addGestureRecognizer(pan)
         }
     }
+
+    public func setupPresentationClosure(
+        began: (() -> Void)? = nil,
+        changed: @escaping (_ fraction: CGFloat, _ translation: CGPoint) -> Void
+    ) {
+        presentationBegan = began
+        presentationChanged = changed
+    }
+
+    public func setupDismissalClosure(
+        began:(() -> Void)? = nil,
+        changed: @escaping (_ fraction: CGFloat, _ translatoin: CGPoint) -> Void
+    ) {
+        dismissalBegan = began
+        dismissalChanged = changed
+    }
 }
 
 // MARK: - UIGestureRecognizerDelegate
@@ -140,13 +159,15 @@ extension SlidingInteractiveTransition {
                 presentingViewController?.dismiss(animated: false)
             }
             if let slidingViewController = delegate?.slidingViewController {
-                presentationWillBegin?()
                 presentingViewController?.present(slidingViewController, animated: true)
+                presentationBegan?()
             }
         case .changed:
             let res = transitionFraction(of: recognizer, operation: .present)
             shouldCompleteTransition = res.shouldCompleteTransition
             update(res.fraction)
+            let translation = recognizer.translation(in: recognizer.view)
+            presentationChanged?(res.fraction, translation)
         case .cancelled, .ended:
             completionSpeed = 0.8
             completionCurve = .easeInOut
@@ -161,10 +182,13 @@ extension SlidingInteractiveTransition {
         case .began:
             isInteractive = true
             presentedViewController?.presentingViewController?.dismiss(animated: true)
+            dismissalBegan?()
         case .changed:
             let res = transitionFraction(of: recognizer, operation: .dismiss)
             shouldCompleteTransition = res.shouldCompleteTransition
             update(res.fraction)
+            let translation = recognizer.translation(in: recognizer.view)
+            dismissalChanged?(res.fraction, translation)
         case .cancelled, .ended:
             completionSpeed = 0.8
             completionCurve = .easeInOut
